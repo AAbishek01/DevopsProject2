@@ -13,7 +13,7 @@ provider "aws" {
 
 # STEP1: CREATE SG
 resource "aws_security_group" "my-sg" {
-  name        = "JENKINS-SERVER-SG"
+  name        = "JENKINS-SERVER-SG-ABI"
   description = "Jenkins Server Ports"
   
   # Port 22 is required for SSH Access
@@ -153,7 +153,7 @@ resource "aws_instance" "my-ec2" {
     # ESTABLISHING SSH CONNECTION WITH EC2
     connection {
       type        = "ssh"
-      private_key = file("./key.pem") # replace with your key-name 
+      private_key = file("./abi.pem") # replace with your key-name 
       user        = "ubuntu"
       host        = self.public_ip
     }
@@ -180,8 +180,18 @@ resource "aws_instance" "my-ec2" {
       "sudo chmod 777 /var/run/docker.sock",
       "docker --version",
 
-      # Install SonarQube (as container)
-      "docker run -d --name sonar -p 9000:9000 sonarqube:lts-community",
+      # Install SonarQube (as container) with proper memory settings
+      "docker run -d --name sonar -p 9000:9000 -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true -e SONAR_SEARCH_JAVA_OPTS='-Xms512m -Xmx512m' -e SONAR_WEB_JAVA_OPTS='-Xms512m -Xmx512m' -e SONAR_CE_JAVA_OPTS='-Xms512m -Xmx512m' -v sonarqube_data:/opt/sonarqube/data -v sonarqube_extensions:/opt/sonarqube/extensions -v sonarqube_logs:/opt/sonarqube/logs sonarqube:lts-community",
+      
+      # Install Prometheus (as container)
+      "docker run -d --name prometheus -p 9090:9090 prom/prometheus",
+      
+      # Install Grafana (as container)
+      "docker run -d --name grafana -p 3000:3000 grafana/grafana",
+      
+      # Ensure SonarQube is properly initialized (wait for it to start)
+      "echo 'Waiting for SonarQube to start...'",
+      "sleep 30",
 
       # Install Trivy
       # Ref: https://aquasecurity.github.io/trivy/v0.18.3/installation/
@@ -243,6 +253,8 @@ resource "aws_instance" "my-ec2" {
       "echo 'Jenkins Initial Password: '$pass''",
       "echo 'Access SonarQube Server here --> http://'$ip':9000'",
       "echo 'SonarQube Username & Password: admin'",
+      "echo 'Access Grafana Server here --> http://$ip:3000'",
+      "echo 'Access Prometheus Server here --> http://$ip:9090'",
     ]
   }
 }  

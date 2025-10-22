@@ -26,8 +26,26 @@ sudo chmod 777 /var/run/docker.sock
 # sudo newgrp docker
 docker --version
 
-# Install Sonarqube (as image)
-docker run -d --name sonar -p 9000:9000 sonarqube:lts-community
+# Set system limits for SonarQube
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+echo "fs.file-max=65536" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Clean up and create volumes for SonarQube
+docker rm -f sonar || true
+docker volume create sonarqube_data
+docker volume create sonarqube_logs
+docker volume create sonarqube_extensions
+
+# Run SonarQube with improved configuration
+docker run -d --name sonar \
+  -p 9000:9000 \
+  -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+  -e SONAR_JAVA_OPTS="-Xms512m -Xmx512m -XX:+HeapDumpOnOutOfMemoryError" \
+  -v sonarqube_data:/opt/sonarqube/data \
+  -v sonarqube_logs:/opt/sonarqube/logs \
+  -v sonarqube_extensions:/opt/sonarqube/extensions \
+  sonarqube:lts-community
 
 # Install Trivy
 sudo apt-get install -y wget apt-transport-https gnupg
